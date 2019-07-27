@@ -40,8 +40,6 @@ else:
     from codecs import open
     from cgi import escape
 
-Host = "http://127.0.0.1:8001"
-
 
 def pytest_addhooks(pluginmanager):
     from . import hooks
@@ -61,6 +59,10 @@ def pytest_addoption(parser):
                     'https://developer.mozilla.org/docs/Web/Security/CSP)')
     group.addoption('--css', action='append', metavar='path', default=[],
                     help='append given css file content to report style file.')
+    group.addoption('--mail-server', action='store', dest='mail_server',
+                    metavar='127.0.0.1:8001', default=None,
+                    help='set mail server Host to send report.html,'
+                         'http protocol, no / at input.')
 
 
 def pytest_configure(config):
@@ -99,6 +101,7 @@ class HTMLReport(object):
         has_rerun = config.pluginmanager.hasplugin('rerunfailures')
         self.rerun = 0 if has_rerun else None
         self.self_contained = config.getoption('self_contained_html')
+        self.mail_server = config.getoption('mail_server')
         self.config = config
 
     class TestResult:
@@ -531,7 +534,7 @@ class HTMLReport(object):
 
     def __send_to_server(self, terminalreporter):
         api = "/mail/pytest"
-        url = "%s%s" % (Host, api)
+        url = "http://%s%s" % (self.mail_server, api)
         files = {'report': open(self.logfile, 'rb')}
         data = {
             'passed': self.passed,
@@ -550,7 +553,14 @@ class HTMLReport(object):
             terminalreporter.write_sep('-', 'send html file to server failed, except.')
 
     def pytest_terminal_summary(self, terminalreporter):
-        self.__send_to_server(terminalreporter)
+        if self.mail_server:
+            if '/' not in self.mail_server:
+                terminalreporter.write_sep('-', 'send html file to %s.' % self.mail_server)
+                self.__send_to_server(terminalreporter)
+            else:
+                terminalreporter.write_sep('-', "--mail-server value is wrong, "
+                                                "please no input /, "
+                                                "your input is %s." % self.mail_server)
         terminalreporter.write_sep(
             '-',
             'generated html file: file://{0}'.format(self.logfile))
