@@ -16,6 +16,7 @@ import time
 import bisect
 import hashlib
 import warnings
+import requests
 
 try:
     from ansi2html import Ansi2HTMLConverter, style
@@ -38,6 +39,8 @@ if PY3:
 else:
     from codecs import open
     from cgi import escape
+
+Host = "http://127.0.0.1:8001"
 
 
 def pytest_addhooks(pluginmanager):
@@ -526,7 +529,28 @@ class HTMLReport(object):
         report_content = self._generate_report(session)
         self._save_report(report_content)
 
+    def __send_to_server(self, terminalreporter):
+        api = "/mail/pytest"
+        url = "%s%s" % (Host, api)
+        files = {'report': open(self.logfile, 'rb')}
+        data = {
+            'passed': self.passed,
+            'skipped': self.skipped,
+            'failed': self.failed,
+            'errors': self.errors,
+            'xfailed': self.xfailed,
+            'xpassed': self.xpassed,
+        }
+        try:
+            resp = requests.post(url, data=data, files=files)
+            if not resp.status_code == 200:
+                terminalreporter.write_sep('-', 'send html file to server failed, status not 200.')
+            terminalreporter.write_sep('-', 'send html file to server success.')
+        except:
+            terminalreporter.write_sep('-', 'send html file to server failed, except.')
+
     def pytest_terminal_summary(self, terminalreporter):
+        self.__send_to_server(terminalreporter)
         terminalreporter.write_sep(
             '-',
             'generated html file: file://{0}'.format(self.logfile))
